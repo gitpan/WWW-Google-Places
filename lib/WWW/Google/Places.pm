@@ -19,11 +19,11 @@ WWW::Google::Places - Interface to Google Places API.
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 Readonly my $BASE_URL => 'https://maps.googleapis.com/maps/api/place';
 Readonly my $LANGUAGE =>
 {
@@ -467,16 +467,36 @@ type 'Place'        => where { my @types;
                              };
 type 'OutputFormat' => where { $_ =~ m(^\bjson\b|\bxml\b$)i };
 type 'Language'     => where { exists($LANGUAGE->{lc($_)}) };
-type 'TrueFalse'    => where { $_ =~ m(^\btrue\b|\bfalse\b$)i };
+type 'TrueFalse'    => where { defined($_) && ($_ =~ m(^\btrue\b|\bfalse\b$)i) };
 has  'api_key'      => (is => 'ro', isa => 'Str',       required => 1);
 has  'sensor'       => (is => 'ro', isa => 'TrueFalse', required => 1);
 has  'browser'      => (is => 'rw', isa => 'LWP::UserAgent', default => sub { return LWP::UserAgent->new(); });
 has  'output'       => (is => 'ro', isa => 'OutputFormat',   default => 'json');
 has  'language'     => (is => 'ro', isa => 'Language',       default => 'en');
 
+around BUILDARGS => sub
+{
+    my $orig  = shift;
+    my $class = shift;
+
+    if (@_ == 1 && ! ref $_[0])
+    {
+        return $class->$orig(api_key => $_[0]);
+    }
+    elsif (@_ == 2 && ! ref $_[0])
+    {
+        return $class->$orig(api_key => $_[0], sensor => $_[1]);
+    }
+    else
+    {
+        return $class->$orig(@_);
+    }
+};
+
 =head1 CONSTRUCTOR
 
-The constructor expects your application API Key at the least, which you can get it for FREE from Google.
+The constructor expects your application API Key and sensor at the least which you can  get it
+for FREE from Google.
 
     +-----------+--------------------------------------------------------------------------------------+
     | Parameter | Meaning                                                                              |
@@ -500,9 +520,9 @@ The constructor expects your application API Key at the least, which you can get
 
     $google  = WWW::Google::Places->new($api_key, $sensor);
     # or
-    $google  = WWW::Google::Places->new('api_key'=>$api_key, sensor=>$sensor);
+    $google  = WWW::Google::Places->new({'api_key'=>$api_key, sensor=>$sensor});
     # or
-    $google  = WWW::Google::Places->new('api_key'=>$api_key, sensor=>$sensor, language=>'en', output=>'json');
+    $google  = WWW::Google::Places->new({'api_key'=>$api_key, sensor=>$sensor, language=>'en', output=>'json'});
 
 =head1 METHODS
 
@@ -531,7 +551,7 @@ Searches place.
     my ($api_key, $sensor, $google, $places);
     $api_key = 'Your_API_Key';
     $sensor  = 'true';
-    $google  = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
+    $google  = WWW::Google::Places->new($api_key, $sensor);
     $places  = $google->search_place(location=>'-33.8670522,151.1957362', radius=>500);
 
 =cut
@@ -569,21 +589,22 @@ sub search_place
 A Place Details request returns more comprehensive information about the indicated place  such
 as its complete address, phone number, user rating, etc.
 
-    +-----------+----------+--------------------------------------------------------------------------------+
-    | Key       | Required | Description                                                                    |
-    +-----------+----------+--------------------------------------------------------------------------------+
-    | reference |   Yes    | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           |          | search request.                                                                |
-    +-----------+----------+--------------------------------------------------------------------------------+
+    +-----------+--------------------------------------------------------------------------------+
+    | Key       | Description                                                                    |
+    +-----------+--------------------------------------------------------------------------------+
+    | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
+    |           | search request. This must be provided.                                         |
+    +-----------+--------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $google, $detail);
-    $api_key = 'Your_API_Key';
-    $sensor  = 'true';
-    $google  = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
-    $detail  = $google->place_detail('CmRYAAAAciqGsTRX1mXRvuXSH2ErwW-jCINE1aLiwP64MCWDN5vkXvXoQGPKldMfmdGyqWSpm7BEYCgDm-iv7Kc2PF7QA7brMAwBbAcqMr5i1f4PwTpaovIZjysCEZTry8Ez30wpEhCNCXpynextCld2EBsDkRKsGhSLayuRyFsex6JA6NPh9dyupoTH3g&sensor=true&key=AIzaSyAiFpFd85eMtfbvmVNEYuNds5TEF9FjIPI');
+    my ($api_key, $sensor, $reference, $google, $detail);
+    $api_key   = 'Your_API_Key';
+    $sensor    = 'true';
+    $reference = 'Place_reference';
+    $google    = WWW::Google::Places->new($api_key, $sensor);
+    $detail    = $google->place_detail($reference);
 
 =cut
 
@@ -620,17 +641,18 @@ over time, so does the ranking of each Place.
     | Key       | Description                                                                    |
     +-----------+--------------------------------------------------------------------------------+
     | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           | search request.                                                                |
+    |           | search request. This must be provided.                                         |
     +-----------+--------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $google, $checkins);
-    $api_key  = 'Your_API_Key';
-    $sensor   = 'true';
-    $google   = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
-    $checkins = $google->place_checkins('CmRYAAAAciqGsTRX1mXRvuXSH2ErwW-jCINE1aLiwP64MCWDN5vkXvXoQGPKldMfmdGyqWSpm7BEYCgDm-iv7Kc2PF7QA7brMAwBbAcqMr5i1f4PwTpaovIZjysCEZTry8Ez30wpEhCNCXpynextCld2EBsDkRKsGhSLayuRyFsex6JA6NPh9dyupoTH3g&sensor=true&key=AIzaSyAiFpFd85eMtfbvmVNEYuNds5TEF9FjIPI');
+    my ($api_key, $sensor, $reference, $google, $checkins);
+    $api_key   = 'Your_API_Key';
+    $sensor    = 'true';
+    $reference = 'Place_reference';
+    $google    = WWW::Google::Places->new($api_key, $sensor);
+    $checkins  = $google->place_checkins($reference);
 
 =cut
 
@@ -659,17 +681,17 @@ sub place_checkins
 
 Add a place to be available for any future search place request.
 
-    +----------+----------+--------------------------------------------------------------------------------+
-    | Key      | Required | Description                                                                    |
-    +----------+----------+--------------------------------------------------------------------------------+
-    | location |   Yes    | The latitude/longitude around which to retrieve Place information. This must   |
-    |          |          | be provided as a google.maps.LatLng object.                                    |
-    | accuracy |   Yes    | The accuracy of the location signal on which this request is based, expressed  |
-    |          |          | in meters.                                                                     |
-    | name     |   Yes    | The full text name of the Place.                                               |
-    | types    |    No    | Restricts the results to Places matching at least one of the specified types.  |
-    |          |          | Types should be separated with a pipe symbol.                                  |
-    +----------+----------+--------------------------------------------------------------------------------+
+    +----------+--------------------------------------------------------------------------------+
+    | Key      | Description                                                                    |
+    +----------+--------------------------------------------------------------------------------+
+    | location | The latitude/longitude around which to retrieve Place information. This must   |
+    |          | be provided as a google.maps.LatLng object.                                    |
+    | accuracy | The accuracy of the location signal on which this request is based, expressed  |
+    |          | in meters. This must be provided.                                              |
+    | name     | The full text name of the Place.                                               |
+    | types    | Restricts the results to Places matching at least one of the specified types.  |
+    |          | Types should be separated with a pipe symbol.                                  |
+    +----------+--------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
@@ -677,7 +699,7 @@ Add a place to be available for any future search place request.
     my ($api_key, $sensor, $google, $status);
     $api_key = 'Your_API_Key';
     $sensor  = 'true';
-    $google  = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
+    $google  = WWW::Google::Places->new($api_key, $sensor);
     $stetus  = $google->add_place('location'=>'-33.8669710,151.1958750', accuracy=>40, name=>'Google Shoes!');
 
 =cut
@@ -745,7 +767,7 @@ continue to be visible to the application that submitted them.
     | Key       | Description                                                                    |
     +-----------+--------------------------------------------------------------------------------+
     | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           | search request.                                                                |
+    |           | search request. This must be provided.                                         |
     +-----------+--------------------------------------------------------------------------------+
 
     use strict; use warnings;
@@ -755,8 +777,8 @@ continue to be visible to the application that submitted them.
     $api_key   = 'Your_API_Key';
     $sensor    = 'true';
     $reference = 'Place_reference';
-    $google    = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
-    $status    = $google->delete_place(reference=>$reference);
+    $google    = WWW::Google::Places->new($api_key, $sensor);
+    $status    = $google->delete_place($reference);
 
 =cut
 
