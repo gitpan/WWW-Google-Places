@@ -19,11 +19,11 @@ WWW::Google::Places - Interface to Google Places API.
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 Readonly my $BASE_URL => 'https://maps.googleapis.com/maps/api/place';
 Readonly my $LANGUAGE =>
 {
@@ -866,8 +866,9 @@ L<http://search.cpan.org/dist/WWW-Google-Places/>
 
 Copyright 2011 Mohammad S Anwar.
 
-This  program  is  distributed  in  the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+This  program  is  free  software; you can redistribute it and/or modify it under the terms of
+either:  the  GNU  General Public License as published by the Free Software Foundation; or the
+Artistic License.
 
 See http://dev.perl.org/licenses/ for more information.
 
