@@ -19,11 +19,11 @@ WWW::Google::Places - Interface to Google Places API.
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 Readonly my $BASE_URL => 'https://maps.googleapis.com/maps/api/place';
 Readonly my $LANGUAGE =>
 {
@@ -737,7 +737,7 @@ sub add_place
     else
     {
         # We handle number this way as JSON expects  number to be treated  as number and 
-        # not number within single/double quotes. Spent one whole day to figure this out.
+        # not number within single/double quotes.Spent one entire day to figure this out.
         $data = {'location' => {'lat' => _handle_number($lat), 'lng' => _handle_number($lng)},
                  'accuracy' => _handle_number($param{'accuracy'}),
                  'name'     => $param{'name'},
