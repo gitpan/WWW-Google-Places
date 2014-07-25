@@ -9,5 +9,7 @@ $api_key = 'Your_API_Key';
 $sensor  = 'true';
 $google  = WWW::Google::Places->new(api_key=>$api_key, sensor=>$sensor);
 
-eval { $google->place_detail(); };
-like($@, qr/0 parameters were passed to WWW\:\:Google\:\:Places\:\:place_detail but 1 was expected/);
+eval { $google->details(); };
+like($@, qr/ERROR: Received undefined mandatory param: placeid/);
+
+done_testing();

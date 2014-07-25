@@ -1,17 +1,26 @@
 package WWW::Google::Places;
 
-use Moose;
-use MooseX::Params::Validate;
-use Moose::Util::TypeConstraints;
-use namespace::clean;
+$WWW::Google::Places::VERSION = '0.05';
 
-use Carp;
+use 5.006;
+use JSON;
 use Data::Dumper;
 
-use JSON;
-use Readonly;
-use HTTP::Request;
-use LWP::UserAgent;
+use WWW::Google::UserAgent;
+use WWW::Google::DataTypes qw($TrueOrFalse $XmlOrJson);
+use WWW::Google::Places::Params qw(validate $Language $FIELDS);
+use WWW::Google::Places::SearchResult;
+use WWW::Google::Places::DetailResult;
+
+use Moo;
+use namespace::clean;
+extends 'WWW::Google::UserAgent';
+
+our $BASE_URL = 'https://maps.googleapis.com/maps/api/place';
+
+has 'sensor'   => (is => 'ro', isa => $TrueOrFalse, default => sub { return 'false' });
+has 'output'   => (is => 'ro', isa => $XmlOrJson,   default => sub { return 'json'  });
+has 'language' => (is => 'ro', isa => $Language,    default => sub { return 'en'    });
 
 =head1 NAME
 
@@ -19,221 +28,19 @@ WWW::Google::Places - Interface to Google Places API.
 
 =head1 VERSION
 
-Version 0.04
-
-=cut
-
-our $VERSION = '0.04';
-Readonly my $BASE_URL => 'https://maps.googleapis.com/maps/api/place';
-Readonly my $LANGUAGE =>
-{
-    'ar'    => 1,
-    'eu'    => 1,
-    'bg'    => 1,
-    'bn'    => 1,
-    'ca'    => 1,
-    'cs'    => 1,
-    'da'    => 1,
-    'de'    => 1,
-    'el'    => 1,
-    'en'    => 1,
-    'en-au' => 1,
-    'en-gb' => 1,
-    'es'    => 1,
-    'eu'    => 1,
-    'fa'    => 1,
-    'fi'    => 1,
-    'fi'    => 1,
-    'fr'    => 1,
-    'gl'    => 1,
-    'gu'    => 1,
-    'hi'    => 1,
-    'hr'    => 1,
-    'hu'    => 1,
-    'id'    => 1,
-    'it'    => 1,
-    'iw'    => 1,
-    'ja'    => 1,
-    'kn'    => 1,
-    'ko'    => 1,
-    'lt'    => 1,
-    'lv'    => 1,
-    'ml'    => 1,
-    'mr'    => 1,
-    'nl'    => 1,
-    'no'    => 1,
-    'pl'    => 1,
-    'pt'    => 1,
-    'pt-br' => 1,
-    'pt-pt' => 1,
-    'ro'    => 1,
-    'ru'    => 1,
-    'sk'    => 1,
-    'sl'    => 1,
-    'sr'    => 1,
-    'sv'    => 1,
-    'tl'    => 1,
-    'ta'    => 1,
-    'te'    => 1,
-    'th'    => 1,
-    'tr'    => 1,
-    'uk'    => 1,
-    'vi'    => 1,
-    'zh-cn' => 1,
-    'zh-tw' => 1,
-};
-Readonly my $PLACE_TYPE =>
-{
-    'accounting'              => 1,
-    'airport'                 => 1,
-    'amusement_park'          => 1,
-    'aquarium'                => 1,
-    'art_gallery'             => 1,
-    'atm'                     => 1,
-    'bakery'                  => 1,
-    'bank'                    => 1,
-    'bar'                     => 1,
-    'beauty_salon'            => 1,
-    'bicycle_store'           => 1,
-    'book_store'              => 1,
-    'bowling_alley'           => 1,
-    'bus_station'             => 1,
-    'cafe'                    => 1,
-    'campground'              => 1,
-    'car_dealer'              => 1,
-    'car_rental'              => 1,
-    'car_repair'              => 1,
-    'car_wash'                => 1,
-    'casino'                  => 1,
-    'cemetery'                => 1,
-    'church'                  => 1,
-    'city_hall'               => 1,
-    'clothing_store'          => 1,
-    'convenience_store'       => 1,
-    'courthouse'              => 1,
-    'dentist'                 => 1,
-    'department_store'        => 1,
-    'doctor'                  => 1,
-    'electrician'             => 1,
-    'electronics_store'       => 1,
-    'embassy'                 => 1,
-    'establishment'           => 1,
-    'finance'                 => 1,
-    'fire_station'            => 1,
-    'florist'                 => 1,
-    'food'                    => 1,
-    'funeral_home'            => 1,
-    'furniture_store'         => 1,
-    'gas_station'             => 1,
-    'general_contractor'      => 1,
-    'geocode'                 => 1,
-    'grocery_or_supermarket'  => 1,
-    'gym'                     => 1,
-    'hair_care'               => 1,
-    'hardware_store'          => 1,
-    'health'                  => 1,
-    'hindu_temple'            => 1,
-    'home_goods_store'        => 1,
-    'hospital'                => 1,
-    'insurance_agency'        => 1,
-    'jewelry_store'           => 1,
-    'laundry'                 => 1,
-    'lawyer'                  => 1,
-    'library'                 => 1,
-    'liquor_store'            => 1,
-    'local_government_office' => 1,
-    'locksmith'               => 1,
-    'lodging'                 => 1,
-    'meal_delivery'           => 1,
-    'meal_takeaway'           => 1,
-    'mosque'                  => 1,
-    'movie_rental'            => 1,
-    'movie_theater'           => 1,
-    'moving_company'          => 1,
-    'museum'                  => 1,
-    'night_club'              => 1,
-    'painter'                 => 1,
-    'park'                    => 1,
-    'parking'                 => 1,
-    'pet_store'               => 1,
-    'pharmacy'                => 1,
-    'physiotherapist'         => 1,
-    'place_of_worship'        => 1,
-    'plumber'                 => 1,
-    'police'                  => 1,
-    'post_office'             => 1,
-    'real_estate_agency'      => 1,
-    'restaurant'              => 1,
-    'roofing_contractor'      => 1,
-    'rv_park'                 => 1,
-    'school'                  => 1,
-    'shoe_store'              => 1,
-    'shopping_mall'           => 1,
-    'spa'                     => 1,
-    'stadium'                 => 1,
-    'storage'                 => 1,
-    'store'                   => 1,
-    'subway_station'          => 1,
-    'synagogue'               => 1,
-    'taxi_stand'              => 1,
-    'train_station'           => 1,
-    'travel_agency'           => 1,
-    'university'              => 1,
-    'veterinary_care'         => 1,
-    'zoo'                     => 1,
-};
-Readonly my $MORE_PLACE_TYPE =>
-{
-    'administrative_area_level_1' => 1,
-    'administrative_area_level_2' => 1,
-    'administrative_area_level_3' => 1,
-    'colloquial_area'             => 1,
-    'country'                     => 1,
-    'floor'                       => 1,
-    'intersection'                => 1,
-    'locality'                    => 1,
-    'natural_feature'             => 1,
-    'neighborhood'                => 1,
-    'political'                   => 1,
-    'point_of_interest'           => 1,
-    'post_box'                    => 1,
-    'postal_code'                 => 1,
-    'postal_code_prefix'          => 1,
-    'postal_town'                 => 1,
-    'premise'                     => 1,
-    'room'                        => 1,
-    'route'                       => 1,
-    'street_address'              => 1,
-    'street_number'               => 1,
-    'sublocality'                 => 1,
-    'sublocality_level_4'         => 1,
-    'sublocality_level_5'         => 1,
-    'sublocality_level_3'         => 1,
-    'sublocality_level_2'         => 1,
-    'sublocality_level_1'         => 1,
-    'subpremise'                  => 1,
-    'transit_station'             => 1,
-};
-Readonly my $STATUS =>
-{
-    'OK'               => 'No errors occurred; the place was successfully detected and at least one result was returned.',
-    'ZERO_RESULTS'     => 'Search was successful but returned no results.',
-    'OVER_QUERY_LIMIT' => 'You are over your quota.',
-    'REQUEST_DENIED'   => 'Your request was denied, generally because of lack of a sensor parameter.',
-    'INVALID_REQUEST'  => 'A required query parameter (location or radius) is missing.',
-    'UNKNOWN_ERROR'    => 'A server-side error; trying again may be successful.',
-};
+Version 0.05
 
 =head1 DESCRIPTION
 
-The Google Places API is a service that returns information about Places,  defined within this
-API as establishments, geographic location or prominent points of interest using HTTP request.
-Place requests specify locations as latitude/longitude coordinates. Users with an API key  are
-allowed 1,000 requests per 24 hour period. Currently it supports version v3.
+The Google Places API is a service that returns information about Places, defined
+within  this  API  as establishments,  geographic location or prominent points of
+interest using HTTP request.Place requests specify location as latitude/longitude
+coordinates. Users with an API key are allowed 1,000 requests per 24 hour period.
+Currently it supports version v3.
 
 =head1 PLACE TYPES
 
-Supported types for Place Searches and Place adds.
+Supported types for Place adds/searches.
 
     +-------------------------+
     | accounting              |
@@ -430,73 +237,10 @@ Additional types listed below can be used in Place Searches, but not when adding
     | zh-TW | CHINESE (TRADITIONAL)   |
     +-------+-------------------------+
 
-=cut
-
-type 'Location'     => where { my ($lat, $lng);
-                               ($_ =~ /\,/)
-                               &&
-                               ((($lat, $lng) = split/\,/,$_,2)
-                                &&
-                                (($lat =~ /^\-?\d+\.?\d+$/)
-                                 &&
-                                 ($lng =~ /^\-?\d+\.?\d+$/)))
-                             };
-type 'SearchPlace'  => where { my @types;
-                               defined($_)
-                               &&
-                               (@types = split/\|/,$_)
-                               &&
-                               (map { exists($PLACE_TYPE->{lc($_)})
-                                      ||
-                                      exists($MORE_PLACE_TYPE->{lc($_)})
-                                    } @types )
-                             };
-type 'AddPlace'     => where { my @types;
-                               defined($_)
-                               &&
-                               (@types = split/\|/,$_)
-                               &&
-                               (map { exists($PLACE_TYPE->{lc($_)}) } @types )
-                             };
-type 'Place'        => where { my @types;
-                               defined($_)
-                               &&
-                               (@types = split/\|/,$_)
-                               &&
-                               (map { exists($PLACE_TYPE->{lc($_)}) } @types )
-                             };
-type 'OutputFormat' => where { $_ =~ m(^\bjson\b|\bxml\b$)i };
-type 'Language'     => where { exists($LANGUAGE->{lc($_)}) };
-type 'TrueFalse'    => where { defined($_) && ($_ =~ m(^\btrue\b|\bfalse\b$)i) };
-has  'api_key'      => (is => 'ro', isa => 'Str',       required => 1);
-has  'sensor'       => (is => 'ro', isa => 'TrueFalse', required => 1);
-has  'browser'      => (is => 'rw', isa => 'LWP::UserAgent', default => sub { return LWP::UserAgent->new(); });
-has  'output'       => (is => 'ro', isa => 'OutputFormat',   default => 'json');
-has  'language'     => (is => 'ro', isa => 'Language',       default => 'en');
-
-around BUILDARGS => sub
-{
-    my $orig  = shift;
-    my $class = shift;
-
-    if (@_ == 1 && ! ref $_[0])
-    {
-        return $class->$orig(api_key => $_[0]);
-    }
-    elsif (@_ == 2 && ! ref $_[0])
-    {
-        return $class->$orig(api_key => $_[0], sensor => $_[1]);
-    }
-    else
-    {
-        return $class->$orig(@_);
-    }
-};
-
 =head1 CONSTRUCTOR
 
-The constructor expects your application API Key and sensor at the least which you can  get it
-for FREE from Google.
+The constructor expects your application API Key and sensor at the least that you
+can  get it for FREE from Google.
 
     +-----------+--------------------------------------------------------------------------------------+
     | Parameter | Meaning                                                                              |
@@ -505,30 +249,23 @@ for FREE from Google.
     |           | key from the Google APIs console. This must be provided.                             |
     | sensor    | Indicates whether or not the Place request came from a device using a location sensor|
     |           | (e.g. a GPS) to determine the location sent in this request. This value must be      |
-    |           | either true or false. This must be provided.                                         |
+    |           | either true or false. Default is false.                                              |
     | language  | The language code, indicating in which language the results should be returned. The  |
     |           | default is en.                                                                       |
-    | output    | Output format JSON or XML. Default is JSON.                                          |
     +-----------+--------------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $google);
-    $api_key = 'Your_API_Key';
-    $sensor  = 'true';
-
-    $google  = WWW::Google::Places->new($api_key, $sensor);
-    # or
-    $google  = WWW::Google::Places->new({'api_key'=>$api_key, sensor=>$sensor});
-    # or
-    $google  = WWW::Google::Places->new({'api_key'=>$api_key, sensor=>$sensor, language=>'en', output=>'json'});
+    my $api_key = 'Your_API_Key';
+    my $place   = WWW::Google::Places->new(api_key => $api_key);
 
 =head1 METHODS
 
-=head2 search_place()
+=head2 search()
 
-Searches place.
+Returns a list of objects of L<WWW::Google::Places::SearchResult>.
+
 
     +----------+--------------------------------------------------------------------------------+
     | Key      | Description                                                                    |
@@ -548,138 +285,81 @@ Searches place.
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $google, $places);
-    $api_key = 'Your_API_Key';
-    $sensor  = 'true';
-    $google  = WWW::Google::Places->new($api_key, $sensor);
-    $places  = $google->search_place(location=>'-33.8670522,151.1957362', radius=>500);
+    my $api_key = 'Your_API_Key';
+    my $place   = WWW::Google::Places->new(api_key => $api_key);
+    my $results = $place->search(location=>'-33.8670522,151.1957362', radius=>500);
 
 =cut
 
-sub search_place
-{
-    my $self  = shift;
-    my %param = validated_hash(\@_,
-                'location' => { isa => 'Location',  required => 1 },
-                'radius'   => { isa => 'Num',       required => 1 },
-                'types'    => { isa => 'SearchPlace', default => undef},
-                'name'     => { isa => 'Str',         default => undef},
-                MX_PARAMS_VALIDATE_NO_CACHE => 1);
+sub search {
+    my ($self, $values) = @_;
 
-    my ($browser, $url, $request, $response, $content);
-    $browser = $self->browser;
-    $url     = sprintf("%s/search/%s?key=%s", $BASE_URL, $self->output, $self->api_key);
-    $url .= sprintf("&location=%s", $param{'location'});
-    $url .= sprintf("&radius=%d",   $param{'radius'});
-    $url .= sprintf("&sensor=%s",   $self->sensor);
-    $url .= sprintf("&language=%s", $self->language);
-    $url .= sprintf("&types=%s",    $param{'types'}) if defined($param{'types'});
-    $url .= sprintf("&name=%s",     $param{'name'})  if defined($param{'name'});
-    $request  = HTTP::Request->new(GET => $url);
-    $response = $browser->request($request);
-    croak("ERROR: Couldn't fetch data [$url]:[".$response->status_line."]\n")
-        unless $response->is_success;
-    $content  = $response->content;
-    croak("ERROR: No data found.\n") unless defined $content;
-    return from_json($content);
+    my $params   = { location => 1, radius => 1, types => 0, name => 0 };
+    my $url      = $self->_url('search', $params, $values);
+    my $response = $self->get($url);
+    my $contents = from_json($response->{content});
+
+    my @results  = map { WWW::Google::Places::SearchResult->new($_) } @{$contents->{results}};
+    return @results;
 }
 
-=head2 place_detail()
+sub search_place {
+    my ($self, %values) = @_;
 
-A Place Details request returns more comprehensive information about the indicated place  such
-as its complete address, phone number, user rating, etc.
+    warn "DEPRECATED method, please use search()";
+    $self->search(\%values);
+}
 
-    +-----------+--------------------------------------------------------------------------------+
-    | Key       | Description                                                                    |
-    +-----------+--------------------------------------------------------------------------------+
-    | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           | search request. This must be provided.                                         |
-    +-----------+--------------------------------------------------------------------------------+
+=head2 details()
+
+Returns an object of L<WWW::Google::Places::DetailResult>
+
+    +-----------+-------------------------------------------------------------------------------------+
+    | Key       | Description                                                                         |
+    +-----------+-------------------------------------------------------------------------------------+
+    | placeid   | A textual identifier that uniquely identifies a place, returned from a Place Search |
+    +-----------+-------------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $reference, $google, $detail);
-    $api_key   = 'Your_API_Key';
-    $sensor    = 'true';
-    $reference = 'Place_reference';
-    $google    = WWW::Google::Places->new($api_key, $sensor);
-    $detail    = $google->place_detail($reference);
+    my $api_key = 'Your_API_Key';
+    my $placeid = 'Place_ID';
+    my $place   = WWW::Google::Places->new(api_key => $api_key);
+    my $details = $place->details($placeid);
 
 =cut
 
-sub place_detail
-{
-    my $self  = shift;
-    my ($reference) = pos_validated_list(\@_,
-                      { isa => 'Str', required => 1 },
-                      MX_PARAMS_VALIDATE_NO_CACHE => 1);
+sub details {
+    my ($self, $placeid) = @_;
 
-    my ($browser, $url, $request, $response, $content);
-    $browser = $self->browser;
-    $url     = sprintf("%s/details/%s?key=%s", $BASE_URL, $self->output, $self->api_key);
-    $url .= sprintf("&reference=%s", $reference);
-    $url .= sprintf("&sensor=%s",    $self->sensor);
-    $url .= sprintf("&language=%s",  $self->language);
-    $request  = HTTP::Request->new(GET => $url);
-    $response = $browser->request($request);
-    croak("ERROR: Couldn't fetch data [$url]:[".$response->status_line."]\n")
-        unless $response->is_success;
-    $content  = $response->content;
-    croak("ERROR: No data found.\n") unless defined $content;
-    return from_json($content);
+    my $params   = { placeid => 1 };
+    my $url      = $self->_url('details', $params, { placeid => $placeid });
+    my $response = $self->get($url);
+    my $contents = from_json($response->{content});
+
+    return WWW::Google::Places::DetailResult->new($contents->{result});
 }
 
-=head2 place_checkins()
+sub place_detail {
+    my ($self, $reference) = @_;
 
-It indicates that a user has checked in to that Place. Check-in activity from your application
-is reflected in the Place search results that are returned - popular establishments are ranked
-more highly making it easy for your users to find likely matches. As check-in activity changes
-over time, so does the ranking of each Place.
+    warn "DEPRECATED method, please use details(). Also key 'reference' is deprecated, use placeid";
+    my $params   = { reference => 1 };
+    my $url      = $self->_url('details', $params, { reference => $reference });
+    my $response = $self->get($url);
+    my $contents = from_json($response->{content});
 
-    +-----------+--------------------------------------------------------------------------------+
-    | Key       | Description                                                                    |
-    +-----------+--------------------------------------------------------------------------------+
-    | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           | search request. This must be provided.                                         |
-    +-----------+--------------------------------------------------------------------------------+
-
-    use strict; use warnings;
-    use WWW::Google::Places;
-
-    my ($api_key, $sensor, $reference, $google, $checkins);
-    $api_key   = 'Your_API_Key';
-    $sensor    = 'true';
-    $reference = 'Place_reference';
-    $google    = WWW::Google::Places->new($api_key, $sensor);
-    $checkins  = $google->place_checkins($reference);
-
-=cut
-
-sub place_checkins
-{
-    my $self = shift;
-    my ($reference) = pos_validated_list(\@_,
-                      { isa => 'Str', required => 1 },
-                      MX_PARAMS_VALIDATE_NO_CACHE => 1);
-
-    my ($browser, $url, $request, $response, $content);
-    $browser  = $self->browser;
-    $url      = sprintf("%s/check-in/%s?key=%s", $BASE_URL, $self->output, $self->api_key);
-    $url .= sprintf("&reference=%s", $reference);
-    $url .= sprintf("&sensor=%s",    $self->sensor);
-    $request  = HTTP::Request->new(GET => $url);
-    $response = $browser->request($request);
-    croak("ERROR: Couldn't fetch data [$url]:[".$response->status_line."]\n")
-        unless $response->is_success;
-    $content  = $response->content;
-    croak("ERROR: No data found.\n") unless defined $content;
-    return from_json($content);
+    return WWW::Google::Places::DetailResult->new($contents->{result});
 }
 
-=head2 add_place()
+sub place_checkins {
+    warn "Google API no longer supports the feature."
+}
 
-Add a place to be available for any future search place request.
+=head2 add()
+
+Add a place to be available for any future search place request. Returnss place id.
 
     +----------+--------------------------------------------------------------------------------+
     | Key      | Description                                                                    |
@@ -696,130 +376,145 @@ Add a place to be available for any future search place request.
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $google, $status);
-    $api_key = 'Your_API_Key';
-    $sensor  = 'true';
-    $google  = WWW::Google::Places->new($api_key, $sensor);
-    $stetus  = $google->add_place('location'=>'-33.8669710,151.1958750', accuracy=>40, name=>'Google Shoes!');
+    my $api_key = 'Your_API_Key';
+    my $place   = WWW::Google::Places->new(api_key => $api_key);
+    my $status  = $place->add('location'=>'-33.8669710,151.1958750', accuracy=>40, name=>'Google Shoes!');
 
 =cut
 
-sub add_place
-{
-    my $self  = shift;
-    my %param = validated_hash(\@_,
-                'location' => { isa => 'Location', required => 1 },
-                'accuracy' => { isa => 'Num',      required => 1 },
-                'name'     => { isa => 'Str',      required => 1 },
-                'types'    => { isa => 'AddPlace', default  => undef},
-                MX_PARAMS_VALIDATE_NO_CACHE => 1);
+sub add {
+    my ($self, $values) = @_;
 
-    my ($data, $lat, $lng);
-    my ($browser, $url, $request, $response, $content);
-    $browser = $self->browser;
-    $url     = sprintf("%s/add/%s?key=%s&sensor=%s", $BASE_URL, $self->output, $self->api_key, $self->sensor);
-    ($lat, $lng) = split /\,/,$param{'location'};
+    my $params   = { location => 1, name => 1, types => 1, accuracy => 1,
+                     address => 0, website => 0, language => 0, phone_number => 0 };
+    my $url      = $self->_url('add');
+    my $content  = $self->_content($params, $values);
+    my $headers  = { 'Host' => 'maps.googleapis.com' };
+    my $response = $self->post($url, $headers, $content);
+    my $contents = from_json($response->{content});
 
-    $request  = HTTP::Request->new(POST => $url);
-    $request->header('Host' => 'maps.googleapis.com');
-    if ($self->output =~ /xml/i)
-    {
-        $data = '<?xml version="1.0" encoding="UTF-8"?>';
-        $data.= '<PlaceAddRequest>';
-        $data.= '<location><lat>' . $lat . '</lat><lng>' . $lng . '</lng></location>';
-        $data.= '<accuracy>' . $param{'accuracy'} . '</accuracy>';
-        $data.= '<name>'     . $param{'name'}     . '</name>';
-        $data.= '<type>'     . $param{'types'}    . '</type>' if defined($param{'types'});
-        $data.= '<language>' . $self->language    . '</language>';
-        $data.= '</PlaceAddRequest>';
-        $request->content($data);
-    }
-    else
-    {
-        # We handle number this way as JSON expects  number to be treated  as number and 
-        # not number within single/double quotes.Spent one entire day to figure this out.
-        $data = {'location' => {'lat' => _handle_number($lat), 'lng' => _handle_number($lng)},
-                 'accuracy' => _handle_number($param{'accuracy'}),
-                 'name'     => $param{'name'},
-                 'language' => $self->language};
-        $data->{'types'} = [$param{'types'}] if defined($param{'types'});
-        $request->content(to_json($data));
-    }
-
-    $response = $browser->request($request);
-    croak("ERROR: Couldn't fetch data [$url]:[".$response->status_line."]\n")
-        unless $response->is_success;
-    $content  = $response->content;
-    croak("ERROR: No data found.\n") unless defined $content;
-    
-    return $content if ($self->output =~ /xml/i);
-    return from_json($content);
+    return $contents->{place_id};
 }
 
-=head2 delete_place()
+sub add_place {
+    my ($self, %values) = @_;
 
-Delete a place as given reference. Place can only be deleted by the same application  that has
-added it in the first place.  Once  moderated  and added into the full Place Search results, a
-Place  can  no longer  be deleted. Places that are not accepted by the moderation process will
-continue to be visible to the application that submitted them.
+    warn "DEPRECATED method, please use add()";
+    $self->add(\%values);
+}
 
-    +-----------+--------------------------------------------------------------------------------+
-    | Key       | Description                                                                    |
-    +-----------+--------------------------------------------------------------------------------+
-    | reference | A textual identifier that uniquely identifies a place, returned from a Place   |
-    |           | search request. This must be provided.                                         |
-    +-----------+--------------------------------------------------------------------------------+
+=head2 delete()
+
+Delete a place as given reference. Place can  be  deleted by the same application
+that has added it in the first place.Once moderated and added into the full Place
+Search results, a Place  can  no longer  be deleted. Places that are not accepted
+by  the  moderation  process  will continue to be visible to the application that
+submitted them.
+
+
+    +-----------+-------------------------------------------------------------------------------------+
+    | Key       | Description                                                                         |
+    +-----------+-------------------------------------------------------------------------------------+
+    | place_id  | A textual identifier that uniquely identifies a place, returned from a Place Search |
+    +-----------+-------------------------------------------------------------------------------------+
 
     use strict; use warnings;
     use WWW::Google::Places;
 
-    my ($api_key, $sensor, $reference, $google, $status);
-    $api_key   = 'Your_API_Key';
-    $sensor    = 'true';
-    $reference = 'Place_reference';
-    $google    = WWW::Google::Places->new($api_key, $sensor);
-    $status    = $google->delete_place($reference);
+    my $api_key  = 'Your_API_Key';
+    my $place_id = 'Place_ID';
+    my $place    = WWW::Google::Places->new(api_key => $api_key);
+    my $status   = $place->delete($place_id);
 
 =cut
 
-sub delete_place
-{
-    my $self = shift;
-    my ($reference) = pos_validated_list(\@_,
-                      { isa => 'Str', required => 1 },
-                      MX_PARAMS_VALIDATE_NO_CACHE => 1);
+sub delete {
+    my ($self, $place_id) = @_;
 
-    my ($browser, $url, $request, $response, $content, $data);
-    $browser  = $self->browser;
-    $url      = sprintf("%s/delete/%s?key=%s&sensor=%s", $BASE_URL, $self->output, $self->api_key, $self->sensor);
-    $request  = HTTP::Request->new(POST => $url);
-    $request->header('Host' => 'maps.googleapis.com');
+    my $params   = { place_id => 1 };
+    my $url      = $self->_url('delete');
+    my $content  = $self->_content($params, { place_id => $place_id });
+    my $headers  = { 'Host' => 'maps.googleapis.com' };
+    my $response = $self->post($url, $headers, $content);
 
-    if ($self->output =~ /xml/i)
-    {
-        $data = '<?xml version="1.0" encoding="UTF-8"?>';
-        $data.= '<PlaceDeleteRequest>';
-        $data.= '<reference>' . $reference . '</reference>';
-        $data.= '</PlaceDeleteRequest>';
-        $request->content($data);
-    }
-    else
-    {
-        $request->content(to_json({'reference' => $reference}));
-    }
-    $response = $browser->request($request);
-    croak("ERROR: Couldn't fetch data [$url]:[".$response->status_line."]\n")
-        unless $response->is_success;
-    $content  = $response->content;
-    croak("ERROR: No data found.\n") unless defined $content;
-    
-    return $content if ($self->output =~ /xml/i);
-    return from_json($content);
+    return from_json($response->{content});
 }
 
-sub _handle_number
-{
-    my $number = shift;
+sub delete_place {
+    my ($self, $reference) = @_;
+
+    warn "DEPRECATED method, please use delete(). Also key 'reference' is deprecated, use place_id";
+    my $params   = { reference => 1 };
+    my $url      = $self->_url('delete');
+    my $content  = $self->_content($params, { reference => $reference });
+    my $headers  = { 'Host' => 'maps.googleapis.com' };
+    my $response = $self->post($url, $headers, $content);
+
+    return from_json($response->{content});
+}
+
+#
+# PRIVATE METHODS
+#
+
+sub _url {
+    my ($self, $type, $params, $values) = @_;
+
+    my $url = sprintf("%s/%s/%s?key=%s&sensor=%s&language=%s",
+                      $BASE_URL, $type, $self->output, $self->api_key,
+                      $self->sensor, $self->language);
+
+    if (defined $params && defined $values) {
+        validate($params, $values);
+
+        foreach my $key (keys %$params) {
+            my $_key = "&$key=%" . $FIELDS->{$key}->{type};
+            $url .= sprintf($_key, $values->{$key}) if defined $values->{$key};
+        }
+    }
+
+    return $url;
+}
+
+sub _content {
+    my ($self, $params, $values) = @_;
+
+    validate($params, $values);
+
+    my $data = {};
+    foreach my $key (keys %$params) {
+        if ($key eq 'language') {
+            if (defined $values->{$key}) {
+                $data->{$key} = $values->{$key};
+            }
+            else {
+                $data->{$key} = $self->language;
+            }
+        }
+
+        next unless defined $values->{$key};
+
+        if ($key eq 'location') {
+            my ($lat, $lng) = split /\,/, $values->{$key};
+            $data->{$key} = {'lat' => _handle_number($lat), 'lng' => _handle_number($lng)};
+        }
+        elsif ($key eq 'types') {
+            $data->{$key} = [ $values->{$key} ];
+        }
+        elsif ($FIELDS->{$key}->{type} eq 'd') {
+            $data->{$key} = _handle_number($values->{$key});
+        }
+        else {
+            $data->{$key} = $values->{$key};
+        }
+    };
+
+    return to_json($data);
+}
+
+sub _handle_number {
+    my ($number) = @_;
+
     return ($number =~ m/^\-?[\d]+(\.[\d]+)?$/)?($number*1):$number;
 }
 
@@ -829,10 +524,10 @@ Mohammad S Anwar, C<< <mohammad.anwar at yahoo.com> >>
 
 =head1 BUGS
 
-Please report any bugs/feature requests to C<bug-www-google-places at rt.cpan.org>, or through
-the  web  interface  at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Google-Places>. I
-will be notified and then you will automatically be notified of progress on your bug as I make
-changes.
+Please report any bugs or feature requests to C<bug-www-google-places at rt.cpan.org>,
+or through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Google-Places>.
+I will be notified, and then you'll automatically be notified of progress on your
+bug as I make changes.
 
 =head1 SUPPORT
 
@@ -844,7 +539,7 @@ You can also look for information at:
 
 =over 4
 
-=item * RT: CPAN's request tracker
+=item * RT: CPAN's request tracker (report bugs here)
 
 L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=WWW-Google-Places>
 
@@ -864,22 +559,42 @@ L<http://search.cpan.org/dist/WWW-Google-Places/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2011 Mohammad S Anwar.
+Copyright 2014 Mohammad S Anwar.
 
-This  program  is  free  software; you can redistribute it and/or modify it under the terms of
-either:  the  GNU  General Public License as published by the Free Software Foundation; or the
-Artistic License.
+This  program  is  free software; you can redistribute it and/or modify it under
+the  terms  of the the Artistic License (2.0). You may obtain a copy of the full
+license at:
 
-See http://dev.perl.org/licenses/ for more information.
+L<http://www.perlfoundation.org/artistic_license_2_0>
 
-=head1 DISCLAIMER
+Any  use,  modification, and distribution of the Standard or Modified Versions is
+governed by this Artistic License.By using, modifying or distributing the Package,
+you accept this license. Do not use, modify, or distribute the Package, if you do
+not accept this license.
 
-This  program  is  distributed in the hope that it will be useful,  but  WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+If your Modified Version has been derived from a Modified Version made by someone
+other than you,you are nevertheless required to ensure that your Modified Version
+ complies with the requirements of this license.
+
+This  license  does  not grant you the right to use any trademark,  service mark,
+tradename, or logo of the Copyright Holder.
+
+This license includes the non-exclusive, worldwide, free-of-charge patent license
+to make,  have made, use,  offer to sell, sell, import and otherwise transfer the
+Package with respect to any patent claims licensable by the Copyright Holder that
+are  necessarily  infringed  by  the  Package. If you institute patent litigation
+(including  a  cross-claim  or  counterclaim) against any party alleging that the
+Package constitutes direct or contributory patent infringement,then this Artistic
+License to you shall terminate on the date that such litigation is filed.
+
+Disclaimer  of  Warranty:  THE  PACKAGE  IS  PROVIDED BY THE COPYRIGHT HOLDER AND
+CONTRIBUTORS  "AS IS'  AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES. THE IMPLIED
+WARRANTIES    OF   MERCHANTABILITY,   FITNESS   FOR   A   PARTICULAR  PURPOSE, OR
+NON-INFRINGEMENT ARE DISCLAIMED TO THE EXTENT PERMITTED BY YOUR LOCAL LAW. UNLESS
+REQUIRED BY LAW, NO COPYRIGHT HOLDER OR CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL,  OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE
+OF THE PACKAGE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =cut
-
-__PACKAGE__->meta->make_immutable;
-no Moose; # Keywords are removed from the WWW::Google::Moderator package
 
 1; # End of WWW::Google::Places
